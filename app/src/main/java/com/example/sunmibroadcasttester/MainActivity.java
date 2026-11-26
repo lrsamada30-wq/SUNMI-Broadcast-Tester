@@ -385,7 +385,7 @@ public class MainActivity extends Activity {
                 }
 
                 detailsView.setText(details.toString());
-                history.insert(0, stamp + " [Broadcast] " + ccode + "\n");
+                history.insert(0, stamp + " [Broadcast] " + code + "\n");
                 if (history.length() > 6000) {
                     history.setLength(6000);
                 }
