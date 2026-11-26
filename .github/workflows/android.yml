@@ -1,15 +1,17 @@
+
 name: Build SUNMI Broadcast Tester APK
 
 on:
   push:
     branches:
       - main
-      - master
   pull_request:
     branches:
       - main
-      - master
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -17,18 +19,18 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      # 1. Descargar el código del repositorio
+      # Descargar el repositorio
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Instalar Java 17 para Android SDK Command Line Tools
+      # Java 17 para Android SDK
       - name: Setup JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      # 3. Configurar Android SDK e instalar componentes
+      # Configurar Android SDK
       - name: Configure Android SDK
         shell: bash
         run: |
@@ -44,53 +46,74 @@ jobs:
             -name sdkmanager -type f | sort -V | tail -n 1)
 
           if [ -z "$SDKMANAGER" ]; then
-            echo "ERROR: No se encontró sdkmanager"
+            echo "ERROR: sdkmanager no encontrado"
             exit 1
           fi
 
           echo "SDK Manager: $SDKMANAGER"
 
-          "$SDKMANAGER" --licenses < <(printf 'y\ny\ny\ny\ny\ny\ny\ny\ny\ny\n')
+          # Aceptar licencias evitando el error Broken pipe
+          set +o pipefail
+          yes | "$SDKMANAGER" --licenses
+          set -o pipefail
 
+          # Instalar componentes necesarios
           "$SDKMANAGER" --install \
             "platform-tools" \
             "platforms;android-28" \
             "build-tools;28.0.3"
 
-      # 4. Configurar Java 8 para Gradle 4.6
+      # Java 8 para Android Gradle Plugin 3.2.1
       - name: Setup JDK 8
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '8'
 
-      # 5. Dar permisos al ejecutable Gradle
-      - name: Grant execute permission for Gradle
-        run: chmod +x ./gradlew
+      # Instalar Gradle 4.6 (el proyecto no tiene gradlew)
+      - name: Setup Gradle 4.6
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '4.6'
 
-      # 6. Compilar APK
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug --stacktrace
-
-      # 7. Comprobar que se generó la APK
-      - name: Verify APK
-        shell: bash
+      # Comprobar estructura del proyecto
+      - name: Verify project structure
         run: |
-          APK=$(find app/build/outputs/apk -name "*.apk" -type f | head -n 1)
+          echo "Directorio del proyecto:"
+          pwd
 
-          if [ -z "$APK" ]; then
-            echo "ERROR: No se encontró ninguna APK"
+          echo "Archivos:"
+          ls -la
+
+          test -f settings.gradle
+          test -f build.gradle
+          test -f app/build.gradle
+
+          echo "Estructura correcta"
+
+      # Compilar APK
+      - name: Build Debug APK
+        run: gradle assembleDebug --stacktrace
+
+      # Verificar APK
+      - name: Verify APK
+        run: |
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+
+          if [ ! -f "$APK" ]; then
+            echo "ERROR: No se generó la APK"
+            find app/build/outputs -type f || true
             exit 1
           fi
 
-          echo "APK generada correctamente:"
+          echo "APK generada:"
           ls -lh "$APK"
 
-      # 8. Publicar APK como artefacto descargable
+      # Publicar APK descargable
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SUNMI-Broadcast-Tester-APK
-          path: app/build/outputs/apk/**/*.apk
+          name: SUNMI-Broadcast-Tester-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
